@@ -1,4 +1,4 @@
-name: Claude Code Action
+name: Claude Code
 
 on:
   issue_comment:
@@ -15,22 +15,13 @@ permissions:
 
 jobs:
   claude:
-    # Only run for PR comments that mention @claude
-    if: |
-      github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@claude')
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Checkout PR branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr checkout ${{ github.event.issue.number }}
 
       - name: Run Claude Code Action
         uses: anthropics/claude-code-action@v1
@@ -38,5 +29,4 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@claude"
-          # v1: choose model via CLI args, not `model:`
           claude_args: "--model sonnet"
