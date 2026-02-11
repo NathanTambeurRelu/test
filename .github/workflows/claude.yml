@@ -12,21 +12,45 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: read
+  checks: read
 
 jobs:
   claude:
+    # Only run for PR comments containing @claude
     if: github.event.issue.pull_request && contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
+
     steps:
+      # ✅ VERY VISIBLE PRINT (proves this workflow version ran)
+      - name: DEBUG - workflow is running
+        run: |
+          echo "=================================================="
+          echo "CLAUDE WORKFLOW DEBUG MARKER v2026-02-11-1"
+          echo "Repo: $GITHUB_REPOSITORY"
+          echo "Run:  $GITHUB_RUN_ID"
+          echo "Event:$GITHUB_EVENT_NAME"
+          echo "Actor:${{ github.actor }}"
+          echo "Issue/PR #: ${{ github.event.issue.number }}"
+          echo "Comment: ${{ github.event.comment.body }}"
+          echo "=================================================="
+          echo "::notice::CLAUDE WORKFLOW DEBUG MARKER v2026-02-11-1"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run Claude Code Action
-        uses: anthropics/claude-code-action@v1
+      # ✅ Workaround: @v1 has been crashing for many users recently; @beta is currently the common workaround
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@beta
         with:
+          # Choose ONE auth method. If you have oauth token, keep it:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
           trigger_phrase: "@claude"
           claude_args: "--model sonnet"
+
+          # Optional but helpful while debugging:
+          # show_full_output: true
