@@ -1,0 +1,95 @@
+name: PR - Quick Fix
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+jobs:
+  quick-fix:
+    # Only run on PR comments that mention @claude
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr checkout ${{ github.event.issue.number }}
+
+      - name: Extract request from comment
+        id: extract
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          # Extract everything after @claude mention
+          REQUEST=$(echo "$COMMENT" | sed 's/.*@claude[[:space:]]*//g')
+
+          echo "request<<EOF" >> $GITHUB_OUTPUT
+          echo "$REQUEST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "Extracted request: $REQUEST"
+
+      - name: Post acknowledgement
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.issue.number }} \
+            --body "🚀 Got it! Claude is working on your request..."
+
+      - name: Claude Quick Fix
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-opus-4-5-20251101
+          timeout_minutes: 30
+          track_progress: true
+          prompt: |
+            You have been tasked with making a quick fix based on this request:
+
+            **Request:** ${{ steps.extract.outputs.request }}
+
+            ## Your Task
+            1. **Understand the request** - Read and comprehend what needs to be fixed or changed
+            2. **Make minimal changes** - Only modify what's necessary to complete the request
+            3. **Verify the fix**:
+               - Run `npm test` if tests exist
+               - Run `npm run lint` to check for lint errors
+               - Fix any issues you find
+            4. **Commit changes** - Use conventional commit format (feat:, fix:, etc.)
+            5. **Push to PR branch** - Git push back to the current branch
+
+            Be efficient and direct. Focus only on what was requested.
+          claude_args: |
+            --max-turns 20
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(npm:*)"
+
+      - name: Post success comment
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.issue.number }} \
+            --body "✅ Done! Changes have been committed and pushed to this PR."
+
+      - name: Post failure comment
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.issue.number }} \
+            --body "❌ Something went wrong. Check the workflow logs for details."
